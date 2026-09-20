@@ -1,0 +1,52 @@
+{
+  "name": "edgelight",
+  "version": "1.0.3",
+  "description": "Windows edge-light ring illumination overlay for video calls",
+  "main": "src/main.js",
+  "author": "EdgeLight Team",
+  "license": "MIT",
+  "scripts": {
+    "generate-icons": "node scripts/generate-icons.js",
+    "start": "electron .",
+    "pack": "npm run generate-icons && electron-builder --dir",
+    "dist": "npm run generate-icons && electron-builder",
+    "dist:portable": "npm run generate-icons && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.edgelight.desktop",
+    "productName": "Edge Light",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false,
+      "forceCodeSigning": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Edge Light",
+      "runAfterFinish": true
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      ".env",
+      ".env.example",
+      "package.json"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  }
+}

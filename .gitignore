@@ -1,0 +1,19 @@
+# Node dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build distributables
+dist/
+build/
+*.exe
+
+# Environment variables & secrets
+.env
+*.local
+*.dat
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store

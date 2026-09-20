@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: mediastream:;">
+  <title>Edge Light</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Screen-edge Ring Canvas -->
+  <canvas id="light"></canvas>
+
+  <!-- Ambient status feedback near screen bottom -->
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <!-- Top invisible zone to catch hovering when dock is hidden -->
+  <div id="hover-zone"></div>
+
+  <!-- Floating Glassmorphic Pill Dock -->
+  <div id="bar" role="toolbar" aria-label="Edge Light Controls">
+    <!-- 1. Power toggle -->
+    <button id="power" type="button" class="active" title="Toggle Edge Light (Ctrl+Shift+L or Space)" aria-label="Toggle Edge Light" aria-pressed="true">⏻</button>
+
+    <!-- 2. Divider -->
+    <div class="div" aria-hidden="true"></div>
+
+    <!-- 2. Colour temperature slider -->
+    <div class="ctrl">
+      <label for="temp"><span class="ctrl-icon">🌡️</span> Temperature <span class="val" id="tempVal">5000K</span></label>
+      <input id="temp" type="range" min="0" max="100" value="50" aria-label="Colour temperature">
+    </div>
+
+    <!-- 5. Thickness slider -->
+    <div class="ctrl">
+      <label for="thickness"><span class="ctrl-icon">📐</span> Thickness <span class="val" id="thicknessVal">96px</span></label>
+      <input id="thickness" type="range" min="20" max="180" value="96" step="2" aria-label="Ring thickness">
+    </div>
+
+    <!-- Divider -->
+    <div class="div" aria-hidden="true"></div>
+
+    <!-- 6. Auto-mode switch -->
+    <div class="switch-wrap" id="autoSwitchWrap" title="Automatic ambient low-light detection via webcam">
+      <button id="autoSwitch" class="switch-btn" type="button" role="switch" aria-checked="false" aria-label="Auto (camera)">
+        <span class="knob" aria-hidden="true"></span>
+      </button>
+      <span id="autoLabel" class="switch-label"><span class="ctrl-icon">📷</span> Auto</span>
+    </div>
+
+    <!-- 7. Calibration slider (poppily expands when Auto is turned on) -->
+    <div class="ctrl threshold-ctrl" id="thresholdWrap" title="Adjust ambient dark threshold (15-180)">
+      <label for="threshold"><span class="ctrl-icon">🎚️</span> Sens <span class="val" id="thresholdVal">70</span><span class="live-lux" id="liveLux"></span></label>
+      <input id="threshold" type="range" min="15" max="180" value="70" aria-label="Auto brightness threshold calibration">
+    </div>
+
+    <!-- 10. Divider -->
+    <div class="div" aria-hidden="true"></div>
+
+    <!-- Footer action & version row -->
+    <div class="dock-footer">
+      <button id="dismissBtn" class="dismiss-btn" type="button" title="Send controls to background / Hide" aria-label="Hide controls">✕</button>
+      <div id="license-badge" class="license-badge" title="Click to view Device License & HWID" role="button" tabindex="0">Trial: 3d</div>
+      <div id="version-badge" class="version-badge" aria-label="App version"></div>
+    </div>
+  </div>
+
+  <!-- Device License / Activation Modal -->
+  <div id="license-modal" class="license-modal" role="dialog" aria-modal="true" aria-labelledby="license-title">
+    <div class="license-card">
+      <div class="license-header">
+        <div class="license-header-title">
+          <span class="license-icon">🛡️</span>
+          <h2 id="license-title">Device License</h2>
+        </div>
+        <button id="closeLicenseBtn" class="license-close-btn" type="button" aria-label="Close modal">✕</button>
+      </div>
+      
+      <div class="license-body">
+        <div class="license-status-badge" id="modalStatusBadge">Checking status…</div>
+
+        <div class="hwid-box">
+          <div class="hwid-label">Device Hardware ID (HWID):</div>
+          <div class="hwid-code-wrap">
+            <code id="hwidDisplay">XXXX-XXXX-XXXX-XXXX</code>
+            <button id="copyHwidBtn" type="button" class="copy-btn" title="Copy HWID to clipboard">📋 Copy</button>
+          </div>
+          <div class="hwid-note">Share this HWID with your administrator or include in payment to activate this machine.</div>
+        </div>
+
+        <div class="license-desc" id="licenseDescription">
+          Every machine automatically receives a 3-day free trial. To activate a commercial license, you can directly choose an affordable plan under ₹100.
+        </div>
+
+        <button id="openPlansFromLicenseBtn" class="primary-btn pulse-glow" type="button">
+          💳 Upgrade / View Plans (from ₹29)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-Run Setup Wizard & Direct Buying Modal -->
+  <div id="setup-wizard-modal" class="wizard-modal" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+    <div class="wizard-card">
+      <div class="wizard-header">
+        <div class="wizard-brand">
+          <span class="wizard-logo">✨</span>
+          <div>
+            <h2 id="wizard-title" class="wizard-title">Edge Light Setup</h2>
+            <div class="wizard-subtitle">Professional Screen Illumination for Video Calls</div>
+          </div>
+        </div>
+        <button id="closeWizardBtn" class="wizard-close-btn" type="button" aria-label="Close setup wizard">✕</button>
+      </div>
+
+      <!-- Step Indicators -->
+      <div class="wizard-steps" role="tablist">
+        <div class="step-tab active" data-step="1">
+          <span class="step-num">1</span>
+          <span class="step-name">Display Fit</span>
+        </div>
+        <div class="step-tab" data-step="2">
+          <span class="step-num">2</span>
+          <span class="step-name">Free Trial</span>
+        </div>
+        <div class="step-tab" data-step="3">
+          <span class="step-num">3</span>
+          <span class="step-name">Choose Plan</span>
+        </div>
+        <div class="step-tab" data-step="4">
+          <span class="step-num">4</span>
+          <span class="step-name">Ready</span>
+        </div>
+      </div>
+
+      <!-- Wizard Step Pages -->
+      <div class="wizard-content">
+        <!-- Step 1: Auto Screen-Size Calibration -->
+        <div class="wizard-step-pane active" id="wizardStep1">
+          <div class="step-hero">
+            <span class="step-hero-icon">🖥️</span>
+            <h3>Automatic Display Calibration</h3>
+            <p>Edge Light detected your monitor resolution and dynamically calibrated the border thickness for optimal studio lighting without obstructing your screen.</p>
+          </div>
+
+          <div class="calibration-preview-box">
+            <div class="calibration-item">
+              <span class="cal-label">Detected Display:</span>
+              <span class="cal-value" id="calDisplayRes">1920 × 1080 (Full HD)</span>
+            </div>
+            <div class="calibration-item">
+              <span class="cal-label">Calibrated Border:</span>
+              <span class="cal-value accent" id="calThickness">96px Studio Ring</span>
+            </div>
+            <div class="calibration-item">
+              <span class="cal-label">Auto Call Detection:</span>
+              <span class="cal-value green">WhatsApp, Zoom, Teams, Meet</span>
+            </div>
+          </div>
+
+          <div class="wizard-actions">
+            <button type="button" class="secondary-btn" id="testLightBtn">💡 Test Glow Preview</button>
+            <button type="button" class="primary-btn" id="step1NextBtn">Continue to Trial →</button>
+          </div>
+        </div>
+
+        <!-- Step 2: 3-Day Evaluation Active -->
+        <div class="wizard-step-pane" id="wizardStep2">
+          <div class="step-hero">
+            <span class="step-hero-icon">🎁</span>
+            <h3>Your 3-Day Free Trial is Active!</h3>
+            <p>Enjoy 100% unrestricted access to all studio features. No payment details required to start.</p>
+          </div>
+
+          <div class="trial-info-card">
+            <div class="trial-badge-row">
+              <span class="badge-pill active">✓ 3-Day Full Pro Access</span>
+              <span class="badge-pill muted" id="wizardHwidPill">HWID: Detecting...</span>
+            </div>
+            <div class="trial-features-grid">
+              <div class="tf-item"><span class="check">✓</span> Edge illumination during video calls</div>
+              <div class="tf-item"><span class="check">✓</span> 3000K–7000K color temperature tuning</div>
+              <div class="tf-item"><span class="check">✓</span> Fluid cursor hole transparency physics</div>
+              <div class="tf-item"><span class="check">✓</span> Auto-detect camera in WhatsApp / Zoom</div>
+            </div>
+          </div>
+
+          <div class="wizard-actions two-way">
+            <button type="button" class="secondary-btn" id="skipToTrialFinishBtn">Start 3-Day Trial</button>
+            <button type="button" class="primary-btn pulse-glow" id="step2UpgradeBtn">View Affordable Plans (under ₹100) →</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Direct Buying & Subscriptions (Under ₹100) -->
+        <div class="wizard-step-pane" id="wizardStep3">
+          <div class="step-hero compact">
+            <span class="step-hero-icon">💳</span>
+            <h3>Affordable Pro Access — Under ₹100</h3>
+            <p>Direct buying via Razorpay Link or instant UPI Scan-to-Pay. Choose the plan that fits you best:</p>
+          </div>
+
+          <!-- Plans Grid -->
+          <div class="pricing-plans-grid" id="pricingGrid">
+            <!-- Monthly Plan -->
+            <div class="plan-card" data-plan-id="monthly">
+              <div class="plan-title">Monthly Pass</div>
+              <div class="plan-price">₹29 <span class="period">/month</span></div>
+              <div class="plan-sub">Flexible monthly access</div>
+              <ul class="plan-perks">
+                <li>✓ Full Ring Illumination</li>
+                <li>✓ Ambient Auto-Sensing</li>
+                <li>✓ WhatsApp & Zoom Support</li>
+              </ul>
+              <div class="plan-select-tag">Select</div>
+            </div>
+
+            <!-- 3-Month Plan (Most Popular) -->
+            <div class="plan-card popular selected" data-plan-id="quarterly">
+              <div class="popular-ribbon">MOST POPULAR</div>
+              <div class="plan-title">3-Month Pass</div>
+              <div class="plan-price">₹49 <span class="period">/ 3 months</span></div>
+              <div class="plan-sub">Only ~₹16 per month</div>
+              <ul class="plan-perks">
+                <li>✓ Everything in Monthly</li>
+                <li>✓ High Priority Support</li>
+                <li>✓ Free Feature Updates</li>
+              </ul>
+              <div class="plan-select-tag">Selected</div>
+            </div>
+
+            <!-- Lifetime Plan (Best Value) -->
+            <div class="plan-card best-value" data-plan-id="lifetime">
+              <div class="popular-ribbon best">BEST VALUE</div>
+              <div class="plan-title">Lifetime Pro</div>
+              <div class="plan-price">₹99 <span class="period">one-time</span></div>
+              <div class="plan-sub">Pay once, own forever</div>
+              <ul class="plan-perks">
+                <li>✓ Lifetime Unlimited Access</li>
+                <li>✓ All Future Pro Upgrades</li>
+                <li>✓ 1 Machine Permanent HWID</li>
+              </ul>
+              <div class="plan-select-tag">Select</div>
+            </div>
+          </div>
+
+          <!-- Razorpay Link & UPI QR Scan Section -->
+          <div class="checkout-box">
+            <div class="checkout-left">
+              <div class="checkout-summary">
+                <span class="checkout-plan-name" id="selectedPlanTitle">3-Month Pass</span>
+                <span class="checkout-price" id="selectedPlanPrice">₹49</span>
+              </div>
+              <p class="checkout-help">Click below to pay via Razorpay (Cards, NetBanking, Wallets, UPI) or scan the QR code directly with any UPI app.</p>
+              
+              <button type="button" class="primary-btn razorpay-btn" id="razorpayDirectBtn">
+                <span class="rzp-icon">⚡</span> Pay <span id="rzpBtnPrice">₹49</span> with Razorpay
+              </button>
+
+              <div class="hwid-checkout-tag">
+                <span>Hardware ID:</span> <code id="wizardHwidCode">XXXX-XXXX-XXXX-XXXX</code>
+                <button type="button" class="mini-copy-btn" id="wizardCopyHwidBtn">📋 Copy</button>
+              </div>
+            </div>
+
+            <div class="checkout-right">
+              <div class="qr-container">
+                <div class="qr-label">Scan to Pay via UPI</div>
+                <img id="upiQrImg" class="upi-qr-image" alt="UPI Payment QR Code" src="" />
+                <div class="qr-apps">GPay • PhonePe • Paytm • BHIM</div>
+                <div class="upi-id-label" id="upiIdDisplay">UPI: edgelight@upi</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="wizard-actions two-way">
+            <button type="button" class="secondary-btn" id="step3BackBtn">← Back</button>
+            <button type="button" class="primary-btn" id="step3NextBtn">Continue →</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Ready to Glow -->
+        <div class="wizard-step-pane" id="wizardStep4">
+          <div class="step-hero">
+            <span class="step-hero-icon">🚀</span>
+            <h3>You're All Set to Glow!</h3>
+            <p>Edge Light is active in your background and will automatically illuminate whenever you join video calls.</p>
+          </div>
+
+          <div class="shortcuts-guide-card">
+            <div class="shortcut-row">
+              <div class="kbd-wrap"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd></div>
+              <div class="shortcut-desc">Toggle Edge Light ring on or off anytime</div>
+            </div>
+            <div class="shortcut-row">
+              <div class="kbd-wrap"><kbd>Hover Top Edge</kbd></div>
+              <div class="shortcut-desc">Reveal floating controls dock to adjust color & thickness</div>
+            </div>
+            <div class="shortcut-row">
+              <div class="kbd-wrap"><kbd>System Tray</kbd></div>
+              <div class="shortcut-desc">Right-click the tray icon to change settings or manage license</div>
+            </div>
+          </div>
+
+          <div class="wizard-actions single">
+            <button type="button" class="primary-btn pulse-glow big-btn" id="finishWizardBtn">✨ Start Using Edge Light</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy notice shown strictly when camera is active AND dock is visible -->
+  <div id="privacy-note">🔒 Camera processed locally — no video stored or transmitted</div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

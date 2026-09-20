@@ -1,0 +1,549 @@
+const { app } = require('electron');
+const { execSync } = require('child_process');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const https = require('https');
+
+// ── ENVIRONMENT CONFIGURATION LOADER ──────────────────────────────
+function loadEnv() {
+  const envPath = path.join(__dirname, '..', '.env');
+  const config = {
+    FIREBASE_PROJECT_ID: 'edge-light-24',
+    FIREBASE_API_KEY: '',
+    FIREBASE_AUTH_DOMAIN: 'edge-light-24.firebaseapp.com',
+    FIREBASE_STORAGE_BUCKET: 'edge-light-24.firebasestorage.app',
+    FIREBASE_MESSAGING_SENDER_ID: '1048711466271',
+    FIREBASE_APP_ID: '1:1048711466271:web:92f149fb95d7f64358f42a',
+    FIREBASE_MEASUREMENT_ID: 'G-79ZK0P075W',
+    FIRESTORE_COLLECTION: 'licenses',
+    TRIAL_DURATION_HOURS: 72,
+    ADMIN_SECRET_SALT: 'EdgeLight-Secure-Vault-Core-Salt-2026',
+    RAZORPAY_KEY_ID: '',
+    RAZORPAY_PAYMENT_LINK_MONTHLY: 'https://rzp.io/l/edgelight-monthly',
+    RAZORPAY_PAYMENT_LINK_QUARTERLY: 'https://rzp.io/l/edgelight-3months',
+    RAZORPAY_PAYMENT_LINK_LIFETIME: 'https://rzp.io/l/edgelight-lifetime',
+    RAZORPAY_UPI_ID: 'edgelight@upi'
+  };
+
+  try {
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          const val = trimmed.slice(eqIdx + 1).trim().replace(/^['"]|['"]$/g, '');
+          if (key && val) {
+            config[key] = key === 'TRIAL_DURATION_HOURS' ? parseInt(val, 10) || 72 : val;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[LicenseManager] Could not read .env file:', e.message);
+  }
+  return config;
+}
+
+const envConfig = loadEnv();
+
+// ── HARDWARE ID GENERATOR ──────────────────────────────────────────
+// Deep-fingerprints persistent hardware components:
+// 1. MachineGuid from Windows Registry
+// 2. Motherboard BIOS UUID via CIM/WMI
+// 3. CPU Processor ID via CIM/WMI
+// Hashes with internal salted HMAC-SHA256 to ensure device-bound tamper resistance.
+function generateHardwareId(salt = envConfig.ADMIN_SECRET_SALT) {
+  let mGuid = '';
+  try {
+    const regOutput = execSync('reg query HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid', {
+      windowsHide: true,
+      timeout: 3000
+    }).toString();
+    const match = regOutput.match(/MachineGuid\s+REG_SZ\s+([a-fA-F0-9\-]+)/i);
+    if (match) mGuid = match[1].trim();
+  } catch (e) {}
+
+  let biosUuid = '';
+  try {
+    biosUuid = execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', {
+      windowsHide: true,
+      timeout: 4000
+    }).toString().trim();
+  } catch (e) {}
+
+  let cpuId = '';
+  try {
+    cpuId = execSync('powershell -NoProfile -Command "(Get-CimInstance -Class Win32_Processor).ProcessorId"', {
+      windowsHide: true,
+      timeout: 4000
+    }).toString().trim();
+  } catch (e) {}
+
+  // Robust fallback if powershell is restricted in corporate environments
+  if (!mGuid && !biosUuid && !cpuId) {
+    mGuid = os.hostname() + '::' + os.userInfo().username;
+  }
+
+  const raw = [mGuid, biosUuid, cpuId].filter(Boolean).join('::');
+  const fullHash = crypto.createHmac('sha256', salt).update(raw).digest('hex').toUpperCase();
+  const shortHwid = fullHash.slice(0, 16).match(/.{1,4}/g).join('-');
+
+  return { fullHash, shortHwid, raw };
+}
+
+// ── ENCRYPTED LOCAL VAULT (AES-256-GCM) ────────────────────────────
+// The local license vault is encrypted with a key derived from the PC's HWID.
+// If this file is copied to another PC, decryption will fail completely.
+class LicenseVault {
+  constructor(hwid, salt) {
+    this.hwid = hwid;
+    this.salt = salt;
+    const appData = app?.getPath ? app.getPath('userData') : path.join(os.homedir(), '.edgelight');
+    if (!fs.existsSync(appData)) {
+      try { fs.mkdirSync(appData, { recursive: true }); } catch (e) {}
+    }
+    this.vaultPath = path.join(appData, 'license.dat');
+    this.key = crypto.scryptSync(hwid + salt, salt, 32);
+  }
+
+  encrypt(dataObj) {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', this.key, iv);
+    const jsonStr = JSON.stringify(dataObj);
+    let encrypted = cipher.update(jsonStr, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag();
+
+    return JSON.stringify({
+      iv: iv.toString('hex'),
+      tag: authTag.toString('hex'),
+      data: encrypted
+    });
+  }
+
+  decrypt(payloadStr) {
+    try {
+      const payload = JSON.parse(payloadStr);
+      const decipher = crypto.createDecipheriv(
+        'aes-256-gcm',
+        this.key,
+        Buffer.from(payload.iv, 'hex')
+      );
+      decipher.setAuthTag(Buffer.from(payload.tag, 'hex'));
+      let decrypted = decipher.update(payload.data, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return JSON.parse(decrypted);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  read() {
+    try {
+      if (!fs.existsSync(this.vaultPath)) return null;
+      const raw = fs.readFileSync(this.vaultPath, 'utf8');
+      return this.decrypt(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  write(dataObj) {
+    try {
+      const encrypted = this.encrypt(dataObj);
+      fs.writeFileSync(this.vaultPath, encrypted, 'utf8');
+      return true;
+    } catch (e) {
+      console.error('[LicenseVault] Write error:', e);
+      return false;
+    }
+  }
+}
+
+// ── FIRESTORE REST API CLIENT ─────────────────────────────────────
+// Uses zero external npm dependencies via Node's native HTTPS module.
+class FirestoreClient {
+  constructor(projectId, apiKey, collection) {
+    this.projectId = projectId;
+    this.apiKey = apiKey;
+    this.collection = collection || 'licenses';
+  }
+
+  isConfigured() {
+    return !!this.projectId && this.projectId.trim().length > 0;
+  }
+
+  async getDocument(docId) {
+    if (!this.isConfigured()) return null;
+    const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/${this.collection}/${encodeURIComponent(docId)}${this.apiKey ? '?key=' + this.apiKey : ''}`;
+
+    return new Promise((resolve) => {
+      https.get(url, { timeout: 5000 }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          if (res.statusCode === 200) {
+            try {
+              const parsed = JSON.parse(body);
+              resolve({ found: true, doc: this._parseFields(parsed.fields) });
+            } catch (e) {
+              resolve({ found: false, error: e.message });
+            }
+          } else if (res.statusCode === 404) {
+            resolve({ found: false, notFound: true });
+          } else {
+            resolve({ found: false, error: `HTTP ${res.statusCode}` });
+          }
+        });
+      }).on('error', (err) => {
+        resolve({ found: false, error: err.message });
+      });
+    });
+  }
+
+  async upsertDocument(docId, fieldsObj) {
+    if (!this.isConfigured()) return null;
+    const queryParams = [];
+    if (this.apiKey) queryParams.push('key=' + encodeURIComponent(this.apiKey));
+    for (const key of Object.keys(fieldsObj)) {
+      queryParams.push(`updateMask.fieldPaths=${encodeURIComponent(key)}`);
+    }
+    const qs = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
+    const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/${this.collection}/${encodeURIComponent(docId)}${qs}`;
+    const payload = JSON.stringify({ fields: this._formatFields(fieldsObj) });
+
+    return new Promise((resolve) => {
+      const req = https.request(url, {
+        method: 'PATCH',
+        timeout: 6000,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload)
+        }
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          resolve(res.statusCode >= 200 && res.statusCode < 300);
+        });
+      });
+
+      req.on('error', () => resolve(false));
+      req.write(payload);
+      req.end();
+    });
+  }
+
+  _parseFields(fields) {
+    if (!fields) return {};
+    const result = {};
+    for (const [key, val] of Object.entries(fields)) {
+      if (val.stringValue !== undefined) result[key] = val.stringValue;
+      else if (val.integerValue !== undefined) result[key] = parseInt(val.integerValue, 10);
+      else if (val.booleanValue !== undefined) result[key] = val.booleanValue;
+      else if (val.timestampValue !== undefined) result[key] = val.timestampValue;
+    }
+    return result;
+  }
+
+  _formatFields(obj) {
+    const fields = {};
+    for (const [key, val] of Object.entries(obj)) {
+      if (typeof val === 'string') fields[key] = { stringValue: val };
+      else if (typeof val === 'number') fields[key] = { integerValue: val.toString() };
+      else if (typeof val === 'boolean') fields[key] = { booleanValue: val };
+      else if (val instanceof Date) fields[key] = { timestampValue: val.toISOString() };
+    }
+    return fields;
+  }
+}
+
+// ── LICENSE MANAGER CONTROLLER ────────────────────────────────────
+class LicenseManager {
+  constructor() {
+    this.config = loadEnv();
+    this.hwidInfo = generateHardwareId(this.config.ADMIN_SECRET_SALT);
+    this.vault = new LicenseVault(this.hwidInfo.fullHash, this.config.ADMIN_SECRET_SALT);
+    this.firestore = new FirestoreClient(
+      this.config.FIREBASE_PROJECT_ID,
+      this.config.FIREBASE_API_KEY,
+      this.config.FIRESTORE_COLLECTION
+    );
+    this.currentStatus = {
+      isAuthorized: false,
+      status: 'evaluating',
+      hwid: this.hwidInfo.shortHwid,
+      fullHwid: this.hwidInfo.fullHash,
+      trialRemainingHours: 0,
+      trialRemainingDays: 0,
+      message: 'Verifying license...'
+    };
+    this.heartbeatInterval = null;
+  }
+
+  getShortHWID() {
+    return this.hwidInfo.shortHwid;
+  }
+
+  // Evaluate authorization status on startup
+  async initialize() {
+    const now = Date.now();
+    const trialDurationMs = (this.config.TRIAL_DURATION_HOURS || 72) * 60 * 60 * 1000;
+
+    let data = this.vault.read();
+
+    // First time running on this device: initialize 3-day free trial
+    if (!data) {
+      data = {
+        hwid: this.hwidInfo.fullHash,
+        shortHwid: this.hwidInfo.shortHwid,
+        pcName: os.hostname(),
+        status: 'trial',
+        firstLaunchTime: now,
+        lastSeenTime: now,
+        clockTampered: false,
+        registeredAt: new Date().toISOString()
+      };
+      this.vault.write(data);
+    }
+
+    // Anti-Clock Tampering Check:
+    // If system clock was dialed backwards by more than 1 hour to cheat the trial
+    if (data.lastSeenTime && now < data.lastSeenTime - 3600000) {
+      data.clockTampered = true;
+      data.status = 'clock_tampered';
+      this.vault.write(data);
+    } else {
+      // Update monotonic high-water mark timestamp
+      data.lastSeenTime = now;
+      this.vault.write(data);
+    }
+
+    // Try synchronizing with Firestore backend (if configured)
+    if (this.firestore.isConfigured()) {
+      try {
+        const remote = await this.firestore.getDocument(this.hwidInfo.shortHwid);
+        if (remote && remote.found && remote.doc) {
+          // If admin approved or rejected in Firestore, remote state takes precedence!
+          if (remote.doc.status) {
+            data.status = remote.doc.status;
+            this.vault.write(data);
+          }
+          // Update live heartbeat in Firestore
+          this.firestore.upsertDocument(this.hwidInfo.shortHwid, {
+            lastActiveAt: new Date().toISOString(),
+            pcName: os.hostname(),
+            appVersion: app?.getVersion ? app.getVersion() : '1.0.3'
+          }).catch(() => {});
+        } else if (remote && remote.notFound) {
+          // Auto-register new device in Firestore as 'trial'
+          this.firestore.upsertDocument(this.hwidInfo.shortHwid, {
+            hwid: this.hwidInfo.shortHwid,
+            fullHwid: this.hwidInfo.fullHash,
+            status: data.status || 'trial',
+            pcName: os.hostname(),
+            registeredAt: new Date().toISOString(),
+            lastActiveAt: new Date().toISOString(),
+            appVersion: app?.getVersion ? app.getVersion() : '1.0.3'
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.log('[LicenseManager] Firestore sync skipped:', e.message);
+      }
+    }
+
+    // Determine current license state
+    return this._evaluate(data);
+  }
+
+  _evaluate(data) {
+    const now = Date.now();
+    const trialDurationMs = (this.config.TRIAL_DURATION_HOURS || 72) * 60 * 60 * 1000;
+    const elapsedMs = Math.max(0, now - (data.firstLaunchTime || now));
+    const remainingMs = Math.max(0, trialDurationMs - elapsedMs);
+    const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60));
+    const remainingDays = Math.floor(remainingHours / 24);
+
+    if (data.clockTampered) {
+      this.currentStatus = {
+        isAuthorized: false,
+        status: 'clock_tampered',
+        hwid: this.hwidInfo.shortHwid,
+        fullHwid: this.hwidInfo.fullHash,
+        trialRemainingHours: 0,
+        trialRemainingDays: 0,
+        message: 'System clock tampering detected. License locked.'
+      };
+      return this.currentStatus;
+    }
+
+    if (data.status === 'approved') {
+      this.currentStatus = {
+        isAuthorized: true,
+        status: 'approved',
+        hwid: this.hwidInfo.shortHwid,
+        fullHwid: this.hwidInfo.fullHash,
+        trialRemainingHours: 9999,
+        trialRemainingDays: 9999,
+        message: 'License Active — Full Commercial Version'
+      };
+      return this.currentStatus;
+    }
+
+    if (data.status === 'rejected' || data.status === 'banned') {
+      this.currentStatus = {
+        isAuthorized: false,
+        status: 'rejected',
+        hwid: this.hwidInfo.shortHwid,
+        fullHwid: this.hwidInfo.fullHash,
+        trialRemainingHours: 0,
+        trialRemainingDays: 0,
+        message: 'Device access revoked by administrator.'
+      };
+      return this.currentStatus;
+    }
+
+    // Active 3-day free trial check
+    if (remainingMs > 0) {
+      const daysStr = remainingDays > 0 ? `${remainingDays}d ` : '';
+      const hoursStr = `${remainingHours % 24}h`;
+      this.currentStatus = {
+        isAuthorized: true,
+        status: 'trial',
+        hwid: this.hwidInfo.shortHwid,
+        fullHwid: this.hwidInfo.fullHash,
+        trialRemainingHours: remainingHours,
+        trialRemainingDays: remainingDays,
+        message: `Free Trial Active (${daysStr}${hoursStr} remaining)`
+      };
+      return this.currentStatus;
+    }
+
+    // Trial has expired
+    this.currentStatus = {
+      isAuthorized: false,
+      status: 'expired',
+      hwid: this.hwidInfo.shortHwid,
+      fullHwid: this.hwidInfo.fullHash,
+      trialRemainingHours: 0,
+      trialRemainingDays: 0,
+      message: '3-Day Free Trial Expired — License Activation Required'
+    };
+    return this.currentStatus;
+  }
+
+  getStatus() {
+    return this.currentStatus;
+  }
+
+  isAuthorized() {
+    return this.currentStatus.isAuthorized;
+  }
+
+  startPeriodicSync(callback) {
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    // Refresh status & send heartbeat every 15 minutes
+    this.heartbeatInterval = setInterval(async () => {
+      const updated = await this.initialize();
+      if (typeof callback === 'function') callback(updated);
+    }, 15 * 60 * 1000);
+  }
+
+  stop() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+  }
+
+  getPaymentConfig() {
+    const defaultHwid = this.hwidInfo.shortHwid;
+    const planList = [
+      {
+        id: 'monthly',
+        name: 'Monthly Pass',
+        price: 29,
+        period: '/ month',
+        popular: false,
+        link: this.config.RAZORPAY_PAYMENT_LINK_MONTHLY || 'https://rzp.io/l/edgelight-monthly',
+        features: [
+          '30 Days Unlimited Illumination',
+          'Webcam Auto-Metering & Low-Light Detect',
+          'Full Screen Video Call Overlays',
+          'Smooth Color Temperature Control'
+        ]
+      },
+      {
+        id: 'quarterly',
+        name: '3-Month Quarter Pass',
+        price: 49,
+        period: '/ 3 months (~₹16/mo)',
+        popular: true,
+        badge: 'Most Popular',
+        link: this.config.RAZORPAY_PAYMENT_LINK_QUARTERLY || 'https://rzp.io/l/edgelight-3months',
+        features: [
+          '90 Days Continuous Studio Ring',
+          'Includes All Monthly Pass Features',
+          'Multi-Monitor & Resolution Scaling',
+          'Priority Updates & Hardware Calibration'
+        ]
+      },
+      {
+        id: 'lifetime',
+        name: 'Lifetime Pro',
+        price: 99,
+        period: 'one-time forever',
+        popular: false,
+        badge: 'Best Value',
+        link: this.config.RAZORPAY_PAYMENT_LINK_LIFETIME || 'https://rzp.io/l/edgelight-lifetime',
+        features: [
+          'Permanent Lifetime Commercial License',
+          'Zero Monthly or Yearly Renewals Ever',
+          'Hardware ID Tied to this Computer',
+          'All Future Pro Updates Included'
+        ]
+      }
+    ];
+
+    const plansById = {};
+    planList.forEach(p => { plansById[p.id] = p; });
+
+    return {
+      razorpayKeyId: this.config.RAZORPAY_KEY_ID || '',
+      keyId: this.config.RAZORPAY_KEY_ID || '',
+      upiId: this.config.RAZORPAY_UPI_ID || 'edgelight@upi',
+      hwid: defaultHwid,
+      plans: planList,
+      plansById: plansById,
+      monthly: plansById.monthly,
+      quarterly: plansById.quarterly,
+      lifetime: plansById.lifetime
+    };
+  }
+
+  getFirebaseConfig() {
+    return {
+      apiKey: this.config.FIREBASE_API_KEY,
+      authDomain: this.config.FIREBASE_AUTH_DOMAIN,
+      projectId: this.config.FIREBASE_PROJECT_ID,
+      storageBucket: this.config.FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: this.config.FIREBASE_MESSAGING_SENDER_ID,
+      appId: this.config.FIREBASE_APP_ID,
+      measurementId: this.config.FIREBASE_MEASUREMENT_ID,
+      collection: this.config.FIRESTORE_COLLECTION
+    };
+  }
+}
+
+module.exports = {
+  LicenseManager,
+  generateHardwareId,
+  LicenseVault,
+  loadEnv
+};
