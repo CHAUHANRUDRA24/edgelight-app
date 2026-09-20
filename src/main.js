@@ -186,17 +186,21 @@ function createTray() {
 
 let keepTopInterval = null;
 
-function ensureTopmost() {
+function ensureTopmost(moveTop = false) {
   if (mainWindow && !mainWindow.isDestroyed() && currentLightState) {
     mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-    mainWindow.moveTop();
+    if (moveTop) {
+      mainWindow.moveTop();
+    }
   }
 }
 
 function startKeepTop() {
   if (keepTopInterval) clearInterval(keepTopInterval);
-  ensureTopmost();
-  keepTopInterval = setInterval(ensureTopmost, 600);
+  ensureTopmost(false);
+  keepTopInterval = setInterval(() => {
+    ensureTopmost(false);
+  }, 2000);
 }
 
 function stopKeepTop() {
@@ -344,7 +348,7 @@ ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
 ipcMain.on('light-state-changed', (event, isOn) => {
   currentLightState = isOn;
   if (isOn) {
-    ensureTopmost();
+    ensureTopmost(true);
   }
   updateTrayMenu(isOn, isControlsVisible);
 });
@@ -447,12 +451,11 @@ function checkWebcamUsage() {
       }
     }
 
-    if (inUse) {
-      ensureTopmost();
-    }
-
     if (inUse !== lastWebcamInUse) {
       lastWebcamInUse = inUse;
+      if (inUse) {
+        ensureTopmost(true);
+      }
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('webcam-access-changed', inUse, activeApps);
       }
@@ -474,21 +477,21 @@ function stopWebcamMonitoring() {
 }
 
 app.whenReady().then(async () => {
-  // Seamless camera permissions for ambient light detection
+  // Ensure Edge Light NEVER locks or interrupts hardware camera streams from WhatsApp, Zoom, etc.
+  // Camera usage detection is handled 100% passively via Windows Registry CapabilityAccessManager.
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
     if (permission === 'media' || permission === 'camera' || permission === 'video') {
-      return callback(true);
+      return callback(false);
     }
     callback(false);
   });
 
   session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
-    if (permission === 'media' || permission === 'camera' || permission === 'video') return true;
     return false;
   });
 
   if (session.defaultSession.setDevicePermissionHandler) {
-    session.defaultSession.setDevicePermissionHandler(() => true);
+    session.defaultSession.setDevicePermissionHandler(() => false);
   }
 
   // Initialize licensing and hardware check

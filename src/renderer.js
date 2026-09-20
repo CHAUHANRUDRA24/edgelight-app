@@ -1148,6 +1148,24 @@
   }
 
   async function startAuto() {
+    // In Electron, Edge Light utilizes passive Windows Registry CapabilityAccessManager
+    // monitoring to detect camera usage with zero hardware device locking or video stream interruption.
+    // This guarantees WhatsApp, Zoom, Teams, and browsers always have 100% uninterrupted,
+    // clean video feeds with zero black screens.
+    if (window.edgeLightAPI?.onWebcamAccessChanged) {
+      isCameraOff = false;
+      isTrackMuted = false;
+      autoWebcamEnabled = true;
+      autoSwitch.setAttribute('aria-checked', 'true');
+      if (thresholdWrap) thresholdWrap.classList.add('active');
+      showStatus('📷 Auto camera detection active ✨', 2200);
+      if (currentWebcamInUse && !state.on) {
+        wasTurnedOnByWebcam = true;
+        setOn(true);
+      }
+      return;
+    }
+
     showStatus('📷 Initializing real-time camera sensor…', 1500);
     isCameraOff = false;
     isTrackMuted = false;
@@ -1264,11 +1282,17 @@
     isCameraOff = false;
     isTrackMuted = false;
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      try {
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (e) {}
       stream = null;
     }
     if (videoEl) {
-      videoEl.srcObject = null;
+      try {
+        videoEl.srcObject = null;
+        videoEl.remove();
+      } catch (e) {}
+      videoEl = null;
     }
     vctx = null;
     smoothLuminance = null;
