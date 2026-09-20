@@ -169,6 +169,12 @@ function createTray() {
     updateTrayMenu(currentLightState);
 
     tray.on('click', () => {
+      if (!licenseManager.isAuthorized()) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('show-license-modal');
+        }
+        return;
+      }
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('toggle-light');
       }
@@ -271,6 +277,9 @@ function createWindow() {
   screen.on('display-removed', handleDisplayChange);
 
   mainWindow.on('closed', () => {
+    screen.removeListener('display-metrics-changed', handleDisplayChange);
+    screen.removeListener('display-added', handleDisplayChange);
+    screen.removeListener('display-removed', handleDisplayChange);
     stopKeepTop();
     mainWindow = null;
   });
@@ -380,15 +389,18 @@ ipcMain.handle('set-launch-at-login', (event, enable) => {
 // ── Windows CapabilityAccessManager Real-Time Webcam Monitor ─────────
 let webcamMonitorInterval = null;
 let lastWebcamInUse = false;
+let isCheckingWebcam = false;
 
 function checkWebcamUsage() {
-  if (process.platform !== 'win32') return;
+  if (process.platform !== 'win32' || isCheckingWebcam) return;
+  isCheckingWebcam = true;
 
   execFile('reg.exe', [
     'query',
     'HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\webcam',
     '/s'
   ], { windowsHide: true }, (err, stdout) => {
+    isCheckingWebcam = false;
     if (err || !stdout) return;
 
     const sections = stdout.split(/(?=HKEY_CURRENT_USER)/i);

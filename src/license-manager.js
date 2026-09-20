@@ -184,14 +184,14 @@ class FirestoreClient {
     const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents/${this.collection}/${encodeURIComponent(docId)}${this.apiKey ? '?key=' + this.apiKey : ''}`;
 
     return new Promise((resolve) => {
-      https.get(url, { timeout: 5000 }, (res) => {
+      const req = https.get(url, { timeout: 5000 }, (res) => {
         let body = '';
         res.on('data', chunk => body += chunk);
         res.on('end', () => {
           if (res.statusCode === 200) {
             try {
               const parsed = JSON.parse(body);
-              resolve({ found: true, doc: this._parseFields(parsed.fields) });
+              resolve({ found: true, doc: this._parseFields(parsed?.fields) });
             } catch (e) {
               resolve({ found: false, error: e.message });
             }
@@ -201,7 +201,12 @@ class FirestoreClient {
             resolve({ found: false, error: `HTTP ${res.statusCode}` });
           }
         });
-      }).on('error', (err) => {
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ found: false, error: 'Request timeout' });
+      });
+      req.on('error', (err) => {
         resolve({ found: false, error: err.message });
       });
     });
@@ -234,6 +239,10 @@ class FirestoreClient {
         });
       });
 
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
       req.on('error', () => resolve(false));
       req.write(payload);
       req.end();

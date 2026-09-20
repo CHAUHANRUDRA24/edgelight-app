@@ -100,9 +100,8 @@
         const currentX = 3 * (1 - x) * (1 - x) * x * p1x + 3 * (1 - x) * x * x * p2x + x * x * x;
         const dx = 3 * (1 - x) * (1 - x) * p1x + 6 * (1 - x) * x * (p2x - p1x) + 3 * x * x * (1 - p2x);
         if (Math.abs(dx) < 1e-6) break;
-        x -= (currentX - t) / dx;
+        x = Math.max(0, Math.min(1, x - (currentX - t) / dx));
       }
-      x = Math.max(0, Math.min(1, x));
       return 3 * (1 - x) * (1 - x) * x * p1y + 3 * (1 - x) * x * x * p2y + x * x * x;
     };
   }
@@ -190,10 +189,12 @@
   // Resize canvas to match screen resolution
   function resize() {
     dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(window.innerWidth * dpr);
-    canvas.height = Math.round(window.innerHeight * dpr);
-    canvas.style.width = window.innerWidth + 'px';
-    canvas.style.height = window.innerHeight + 'px';
+    const w = Math.max(100, window.innerWidth || 1920);
+    const h = Math.max(100, window.innerHeight || 1080);
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Auto-adjust thickness to detected PC screen size if user hasn't set custom manual override
@@ -445,12 +446,14 @@
 
       // 8 smoothstep points: S(t) = 3t^2 - 2t^3 gives buttery seamless curvature
       const steps = 8;
+      let lastStop = coreRatio;
       for (let i = 1; i <= steps; i++) {
         const t = i / steps;
         const stopPos = coreRatio + t * (1 - coreRatio);
         const smoothT = t * t * (3 - 2 * t);
         const alpha = Math.max(0, (1 - smoothT) * p);
-        const safeStop = Math.max(0.0, Math.min(1.0, stopPos));
+        const safeStop = Math.min(1.0, Math.max(lastStop, stopPos));
+        lastStop = safeStop;
         grad.addColorStop(safeStop, `rgba(0,0,0,${alpha.toFixed(4)})`);
       }
 
@@ -475,7 +478,8 @@
   }
 
   function renderLoop(now) {
-    const dt = Math.min(now - lastFrameTime, 33);
+    const rawDt = now - lastFrameTime;
+    const dt = Math.max(1, Math.min(isNaN(rawDt) ? 16 : rawDt, 33));
     lastFrameTime = now;
 
     let needsNextFrame = false;
@@ -548,7 +552,8 @@
     }
 
     // ── macOS-Style Fluid Cursor Hole Spring Interpolation ──────────
-    if (mouseState.targetX > -1000) {
+    let targetP = 0;
+    if (mouseState.targetX > -1000 && state.avoidMouse && state.on && renderState.thickScale > 0.05) {
       if (mouseState.currentX < -1000) {
         mouseState.currentX = mouseState.targetX;
         mouseState.currentY = mouseState.targetY;
@@ -617,20 +622,22 @@
       }
 
       // targetP: 1.0 everywhere inside the light band, smoothly dissolving as cursor retreats into screen center
-      let targetP = 0;
-      if (state.avoidMouse && state.on && renderState.thickScale > 0.05) {
-        const approachZone = 120;
-        targetP = Math.max(0, Math.min(1.0, (bandDepth + approachZone) / (approachZone - 20)));
-      }
-      mouseState.targetProximity = targetP;
+      const approachZone = 120;
+      targetP = Math.max(0, Math.min(1.0, (bandDepth + approachZone) / (approachZone - 20)));
+    }
 
-      // Smooth bloom-in (~40ms) and dissolve-out (~75ms) for the recession cove
+    mouseState.targetProximity = targetP;
+
+    // Smooth bloom-in (~40ms) and dissolve-out (~75ms) for the recession cove
+    if (mouseState.currentProximity !== targetP) {
       const pSpeed = targetP > mouseState.currentProximity ? 40 : 75;
       const pDamping = 1 - Math.exp(-dt / pSpeed);
-      const dp = mouseState.targetProximity - mouseState.currentProximity;
-      mouseState.currentProximity += dp * pDamping;
-      if (Math.abs(dp) > 0.005) {
+      const dp = targetP - mouseState.currentProximity;
+      if (Math.abs(dp) > 0.002) {
+        mouseState.currentProximity += dp * pDamping;
         needsNextFrame = true;
+      } else {
+        mouseState.currentProximity = targetP;
       }
     }
 
@@ -996,6 +1003,8 @@
   });
 
   window.addEventListener('mouseleave', () => {
+    mouseState.targetX = -9999;
+    mouseState.targetY = -9999;
     mouseState.targetProximity = 0;
     requestRender();
     if (!isPointerDown) {
@@ -1005,6 +1014,8 @@
   });
 
   document.addEventListener('mouseleave', () => {
+    mouseState.targetX = -9999;
+    mouseState.targetY = -9999;
     mouseState.targetProximity = 0;
     requestRender();
     if (!isPointerDown) {
@@ -1680,7 +1691,10 @@
 
   function updateSelectedPlanUI(planId) {
     currentSelectedPlanId = planId;
-    const plan = paymentConfig.plans[planId] || paymentConfig.plans.quarterly;
+    const plansSource = paymentConfig.plansById || (Array.isArray(paymentConfig.plans)
+      ? paymentConfig.plans.reduce((acc, p) => { acc[p.id] = p; return acc; }, {})
+      : paymentConfig.plans);
+    const plan = plansSource?.[planId] || plansSource?.quarterly || { id: planId, name: 'Pass', price: 49 };
 
     planCards.forEach((card) => {
       const isSelected = card.dataset.planId === planId;
@@ -1744,9 +1758,12 @@
   });
 
   razorpayDirectBtn?.addEventListener('click', async () => {
-    const plan = paymentConfig.plans[currentSelectedPlanId] || paymentConfig.plans.quarterly;
+    const plansSource = paymentConfig.plansById || (Array.isArray(paymentConfig.plans)
+      ? paymentConfig.plans.reduce((acc, p) => { acc[p.id] = p; return acc; }, {})
+      : paymentConfig.plans);
+    const plan = plansSource?.[currentSelectedPlanId] || plansSource?.quarterly || {};
     const url = plan.link || 'https://razorpay.com';
-    showStatus(`⚡ Launching Razorpay checkout (₹${plan.price})…`, 3000);
+    showStatus(`⚡ Launching Razorpay checkout (₹${plan.price || 49})…`, 3000);
     if (window.edgeLightAPI?.openExternal) {
       await window.edgeLightAPI.openExternal(url);
     } else {
@@ -1802,9 +1819,10 @@
   const origUpdateLicenseUI = updateLicenseUI;
   function enhancedUpdateLicenseUI(info) {
     origUpdateLicenseUI(info);
-    if (info?.shortHwid) {
-      if (wizardHwidPill) wizardHwidPill.textContent = `HWID: ${info.shortHwid}`;
-      if (wizardHwidCode) wizardHwidCode.textContent = info.shortHwid;
+    const hwid = info?.hwid || info?.shortHwid;
+    if (hwid) {
+      if (wizardHwidPill) wizardHwidPill.textContent = `HWID: ${hwid}`;
+      if (wizardHwidCode) wizardHwidCode.textContent = hwid;
       updateSelectedPlanUI(currentSelectedPlanId);
     }
   }
