@@ -1,163 +1,150 @@
 <div align="center">
 
-  <img src="assets/icon.png" alt="Edge Light Logo" width="100" height="100">
+  <img src="assets/icon.png" alt="Edge Light Logo" width="80" height="80">
 
-  # Edge Light Desktop Application
+  # Edge Light
 
-  **Studio Ring Illumination for Video Calls on Windows — Zero Extra Hardware**
+  **Screen-edge studio ring illumination for Windows video calls**
 
-  [![GitHub Stars](https://img.shields.io/github/stars/CHAUHANRUDRA24/edgelight-app?style=for-the-badge&logo=github)](https://github.com/CHAUHANRUDRA24/edgelight-app)
-  [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows)](https://microsoft.com)
-  [![Electron](https://img.shields.io/badge/Electron-33.2-47848F?style=for-the-badge&logo=electron)](https://electronjs.org)
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-  [![Maintainer](https://img.shields.io/badge/Maintainer-CHAUHANRUDRA24-orange?style=for-the-badge&logo=github)](https://github.com/CHAUHANRUDRA24)
+  [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=flat-square&logo=windows)](https://microsoft.com)
+  [![Electron](https://img.shields.io/badge/Electron-33.2-47848F?style=flat-square&logo=electron)](https://electronjs.org)
+  [![Node](https://img.shields.io/badge/Node-%3E%3D18.0-339933?style=flat-square&logo=node.js)](https://nodejs.org)
+  [![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 
-  <br>
-
-  [Download Portable (.exe)](https://github.com/CHAUHANRUDRA24/edgelight-landing) • [Report Issue](https://github.com/CHAUHANRUDRA24/edgelight-app/issues) • [Pricing](#-affordable-licensing-under-100)
+  [Download](https://github.com/CHAUHANRUDRA24/edgelight-landing) • [Report Issue](https://github.com/CHAUHANRUDRA24/edgelight-app/issues) • [Documentation](#quick-start)
 
 </div>
 
 ---
 
-## 📖 Overview
+## Overview
 
-**Edge Light** turns the border of your Windows monitor into a calibrated studio-grade ring light. Designed for remote workers, content creators, and students, Edge Light illuminates your face evenly during video calls on **WhatsApp, Zoom, Google Meet, and Microsoft Teams** without blinding you or obscuring your work.
-
----
-
-## 🌟 Key Highlights
-
-### 🖥️ Automatic Display Calibration & Setup Wizard
-- Automatically detects monitor resolution on launch (HD 768p, Full HD 1080p, QHD 1440p, 4K).
-- Dynamically scales border thickness proportionally (e.g. 96px on 1080p, 68px on 768p) for perfect lighting balance.
-- Interactive first-run **Setup Wizard** with a live glow test preview.
-
-### 📷 Smart Camera Detection (MacBook Style)
-- Continuously inspects Windows `CapabilityAccessManager` in real-time.
-- Automatically blooms the illumination ring on the instant a call starts in WhatsApp, Zoom, or web browsers, and gracefully eases off when the camera closes.
-
-### 🖱️ macOS-Style Fluid Mouse Avoidance
-- Physics-based cursor avoidance with smooth spring damping.
-- You can freely click, drag, and close tabs under the illumination ring with zero click interference.
-
-### 🌡️ Studio Color Temperature Control
-- Seamless sliding between **3000K warm candle glow** and **7000K crisp daylight cool**.
-- Calibrated gamma-corrected color mixing for natural skin tones.
-
-### 🛡️ Device-Bound Cryptographic Licensing
-- Unique deterministic Hardware ID (`HWID`) generated from Windows Registry `MachineGuid`, Motherboard BIOS UUID, and CPU ID.
-- Stored in a local AES-256-GCM encrypted vault with anti-clock tampering protection.
-- Every installation receives an out-of-the-box **3-Day Unrestricted Free Trial**.
+**Edge Light** transforms the perimeter of your Windows display into a calibrated illumination ring. It provides balanced facial lighting for video calls on **WhatsApp, Zoom, Microsoft Teams, and Google Meet** without requiring external hardware or blocking on-screen content.
 
 ---
 
-## 💳 Affordable Licensing (Under ₹100)
+## Features
 
-Edge Light features budget-friendly commercial tiers directly purchasable via **Razorpay** and **Scan-to-Pay UPI QR**:
-
-| Plan | Price | Duration | Best For | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Monthly Pass** | **₹29** | 30 Days | Short-term projects & trials | Active |
-| **3-Month Pass** | **₹49** | 90 Days (~₹16/mo) | Regular remote meetings | **Most Popular** |
-| **Lifetime Pro** | **₹99** | One-time forever | Permanent commercial ownership | **Best Value** |
-
----
-
-## ⌨️ Global Keyboard Shortcuts
-
-| Shortcut | Action | Description |
-| :--- | :--- | :--- |
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd> | **Toggle Illumination** | Instantly turns the ring light on/off |
-| <kbd>Hover Top Edge</kbd> | **Reveal Dock** | Shows floating glassmorphic control bar |
-| <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> | **Quit App** | Safely exits the background process |
+- **Automatic Screen Calibration**: Detects monitor resolution on startup (768p through 4K) and scales ring thickness proportionally.
+- **Camera Activity Detection**: Reads Windows `CapabilityAccessManager` to activate illumination when a call begins and deactivate it when the camera closes.
+- **Cursor Avoidance & Click-Through**: Dynamic cutout prevents cursor obstruction while allowing standard window interactions beneath the overlay.
+- **Color Temperature Tuning**: Continuous adjustment between 3000K (warm) and 6500K (cool daylight).
+- **Device-Bound Licensing**: Generates a persistent Hardware ID (HWID) based on machine components, backed by local AES-256-GCM encryption and remote Firestore verification.
+- **Included Trial**: 3-day evaluation period available upon first launch.
 
 ---
 
-## 🏗️ Architecture & Project Structure
+## Plans & Licensing
+
+Edge Light offers flexible pricing options payable via Razorpay and UPI:
+
+| Tier | Price | Duration | Coverage |
+| :--- | :--- | :--- | :--- |
+| **Monthly** | ₹29 | 30 Days | Full access, auto camera detection, updates |
+| **Quarterly** | ₹49 | 90 Days | Full access, priority updates |
+| **Lifetime** | ₹99 | Permanent | Lifetime license tied to device HWID |
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Ctrl` + `Shift` + `L` | Toggle illumination on/off |
+| `Hover right screen edge` | Display glassmorphic control dock |
+| `Ctrl` + `Shift` + `Q` | Exit application |
+
+---
+
+## Project Structure
 
 ```
 application/
-├── assets/                  # High-res application icons (.ico, .png, tray)
+├── assets/                  # Icons and application branding
 │   ├── icon.ico
 │   ├── icon.png
 │   └── tray-icon.png
-├── scripts/                 # Build automation & verification test suites
+├── scripts/                 # Build and test scripts
 │   ├── generate-icons.js
 │   ├── test-setup-wizard-and-plans.js
 │   └── test-firebase-integration.js
-├── src/                     # Core application source code
-│   ├── index.html           # Transparent window overlay & Setup Wizard
-│   ├── main.js              # Electron Main process, Tray, & HWID monitors
-│   ├── preload.js           # Secure ContextBridge API surface
-│   ├── renderer.js          # Canvas 2D ring rendering & physics engine
-│   ├── style.css            # Glassmorphic UI & Setup Wizard styling
-│   └── license-manager.js   # Cryptographic vault & Firestore sync client
-├── .env.example             # Configuration template
-├── .gitignore
-├── package.json             # Build scripts & Electron dependencies
+├── src/                     # Core application source
+│   ├── index.html           # Main overlay window and setup wizard
+│   ├── main.js              # Electron main process and system integrations
+│   ├── preload.js           # Secure IPC bridge
+│   ├── renderer.js          # Canvas rendering and animation loop
+│   ├── style.css            # Overlay and dock styles
+│   └── license-manager.js   # HWID generation and license verification
+├── .env.example             # Environment variable template
+├── package.json             # Build configuration and dependencies
 └── README.md
 ```
 
 ---
 
-## 🚀 Quick Start & Development
+## Quick Start
 
 ### Prerequisites
-- [Node.js](https://nodejs.org) (v18 or newer)
-- Windows 10 / 11 (64-bit)
+
+- [Node.js](https://nodejs.org) (v18 or later)
+- Windows 10 or 11 (64-bit)
 
 ### Installation
+
 ```bash
-# 1. Clone repository
+# Clone the repository
 git clone https://github.com/CHAUHANRUDRA24/edgelight-app.git
 cd edgelight-app
 
-# 2. Install dependencies
+# Install dependencies
 npm install
 
-# 3. Configure environment
+# Set up environment variables
 cp .env.example .env
 ```
 
-### Running Locally
+### Development
+
 ```bash
+# Start application in development mode
 npm start
 ```
 
-### Automated Verification
+### Testing
+
 ```bash
-# Run test suite
+# Run verification test suites
 node scripts/test-setup-wizard-and-plans.js
+node scripts/test-firebase-integration.js
 ```
 
 ---
 
-## 📦 Building Distributables
+## Distribution Builds
 
-Edge Light uses `electron-builder` to package zero-dependency production executables:
+Packaged executables are built using `electron-builder`:
 
 ```bash
-# Build Standalone Portable (.exe)
+# Portable executable (.exe)
 npm run dist:portable
 
-# Build Full Windows Installer (.exe with NSIS)
+# Full installer (.exe)
 npm run dist
 ```
-Compiled output will be saved into the `dist/` directory:
+
+Build outputs are generated in the `dist/` folder:
 - `dist/Edge Light 1.0.3.exe` (Standalone Portable)
-- `dist/Edge Light Setup 1.0.3.exe` (Windows Installer)
+- `dist/Edge Light Setup 1.0.3.exe` (NSIS Installer)
 
 ---
 
-## 👨‍💻 Maintainer & Author
+## Author
 
-- **Author**: **CHAUHANRUDRA24**
-- **Email**: [rudrachauhan2475@gmail.com](mailto:rudrachauhan2475@gmail.com)
-- **GitHub**: [@CHAUHANRUDRA24](https://github.com/CHAUHANRUDRA24)
+- **Maintainer**: Chauhan Rudra ([@CHAUHANRUDRA24](https://github.com/CHAUHANRUDRA24))
+- **Contact**: rudrachauhan2475@gmail.com
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the [MIT License](LICENSE).
