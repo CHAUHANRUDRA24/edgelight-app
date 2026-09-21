@@ -635,7 +635,7 @@ input[type="range"]:focus-visible,
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  z-index: 100;
+  z-index: 1000;
   opacity: 0;
   pointer-events: none;
   transition: opacity 300ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -647,6 +647,8 @@ input[type="range"]:focus-visible,
 }
 
 .license-card {
+  position: relative;
+  z-index: 1001;
   width: 90%;
   max-width: 440px;
   background: rgba(24, 25, 30, 0.95);
@@ -884,7 +886,7 @@ input[type="range"]:focus-visible,
   background: rgba(8, 9, 12, 0.82);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  z-index: 150;
+  z-index: 1050;
   opacity: 0;
   pointer-events: none;
   transition: opacity 300ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -896,6 +898,8 @@ input[type="range"]:focus-visible,
 }
 
 .wizard-card {
+  position: relative;
+  z-index: 1051;
   width: 92%;
   max-width: 620px;
   max-height: 90vh;

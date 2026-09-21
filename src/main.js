@@ -61,6 +61,9 @@ function updateTrayMenu(isOn, controlsShown = isControlsVisible) {
         click: () => {
           clipboard.writeText(licenseManager.getShortHWID());
           if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+            mainWindow.moveTop();
+            mainWindow.focus();
             mainWindow.webContents.send('show-license-modal');
           }
         }
@@ -69,6 +72,9 @@ function updateTrayMenu(isOn, controlsShown = isControlsVisible) {
         label: 'Manage License…',
         click: () => {
           if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+            mainWindow.moveTop();
+            mainWindow.focus();
             mainWindow.webContents.send('show-license-modal');
           }
         }
@@ -77,6 +83,9 @@ function updateTrayMenu(isOn, controlsShown = isControlsVisible) {
         label: 'Setup Wizard & Plans…',
         click: () => {
           if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+            mainWindow.moveTop();
+            mainWindow.focus();
             mainWindow.webContents.send('show-setup-wizard');
           }
         }
@@ -88,6 +97,9 @@ function updateTrayMenu(isOn, controlsShown = isControlsVisible) {
         click: () => {
           if (!licenseManager.isAuthorized()) {
             if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+              mainWindow.moveTop();
+              mainWindow.focus();
               mainWindow.webContents.send('show-license-modal');
             }
             return;
@@ -171,6 +183,9 @@ function createTray() {
     tray.on('click', () => {
       if (!licenseManager.isAuthorized()) {
         if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+          mainWindow.moveTop();
+          mainWindow.focus();
           mainWindow.webContents.send('show-license-modal');
         }
         return;
@@ -187,7 +202,7 @@ function createTray() {
 let keepTopInterval = null;
 
 function ensureTopmost(moveTop = false) {
-  if (mainWindow && !mainWindow.isDestroyed() && currentLightState) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
     if (moveTop) {
       mainWindow.moveTop();
@@ -294,6 +309,9 @@ function registerShortcuts() {
   globalShortcut.register('CommandOrControl+Shift+L', () => {
     if (!licenseManager.isAuthorized()) {
       if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+        mainWindow.moveTop();
+        mainWindow.focus();
         mainWindow.webContents.send('show-license-modal');
       }
       return;
@@ -339,9 +357,21 @@ ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
       win.setIgnoreMouseEvents(true, { forward: true });
     } else {
       win.setIgnoreMouseEvents(false);
+      win.setAlwaysOnTop(true, 'screen-saver', 1);
+      win.moveTop();
+      win.focus();
     }
     // Maintain highest z-order so edge light strictly stays forward over all apps
-    ensureTopmost();
+    ensureTopmost(true);
+  }
+});
+
+ipcMain.on('bring-to-front', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win && !win.isDestroyed()) {
+    win.setAlwaysOnTop(true, 'screen-saver', 1);
+    win.moveTop();
+    win.focus();
   }
 });
 

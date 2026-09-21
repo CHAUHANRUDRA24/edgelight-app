@@ -1622,6 +1622,9 @@
     if (!licenseModal) return;
     setClickThrough(false);
     licenseModal.classList.add('visible');
+    if (window.edgeLightAPI?.bringToFront) {
+      window.edgeLightAPI.bringToFront();
+    }
   }
 
   function hideLicenseModal() {
@@ -1769,6 +1772,9 @@
     setClickThrough(false);
     goToWizardStep(initialStep);
     wizardModal?.classList.add('visible');
+    if (window.edgeLightAPI?.bringToFront) {
+      window.edgeLightAPI.bringToFront();
+    }
   }
 
   function hideSetupWizard() {

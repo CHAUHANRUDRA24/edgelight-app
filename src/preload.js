@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('edgeLightAPI', {
   setIgnoreMouseEvents: (ignore, options) => {
     ipcRenderer.send('set-ignore-mouse-events', ignore, options);
   },
+  bringToFront: () => {
+    ipcRenderer.send('bring-to-front');
+  },
   onToggleLight: (callback) => {
     const subscription = (_event, ...args) => callback(...args);
     ipcRenderer.on('toggle-light', subscription);
