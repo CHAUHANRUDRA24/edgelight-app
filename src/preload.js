@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('edgeLightAPI', {
   getLaunchAtLogin: () => ipcRenderer.invoke('get-launch-at-login'),
   setLaunchAtLogin: (enable) => ipcRenderer.invoke('set-launch-at-login', enable),
   getLicenseInfo: () => ipcRenderer.invoke('get-license-info'),
+  refreshLicenseInfo: () => ipcRenderer.invoke('refresh-license-info'),
   copyHWID: () => ipcRenderer.invoke('copy-hwid'),
   getPaymentConfig: () => ipcRenderer.invoke('get-payment-config'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),

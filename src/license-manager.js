@@ -342,6 +342,12 @@ class LicenseManager {
           // If admin approved or rejected in Firestore, remote state takes precedence!
           if (remote.doc.status) {
             data.status = remote.doc.status;
+            if (remote.doc.status === 'approved' || remote.doc.status === 'trial') {
+              data.clockTampered = false;
+            }
+            if (remote.doc.status === 'trial' && remote.doc.resetTrial) {
+              data.firstLaunchTime = now;
+            }
             this.vault.write(data);
           }
           // Update live heartbeat in Firestore
@@ -455,13 +461,19 @@ class LicenseManager {
     return this.currentStatus.isAuthorized;
   }
 
-  startPeriodicSync(callback) {
+  async refresh() {
+    return await this.initialize();
+  }
+
+  startPeriodicSync(callback, intervalMs = 30000) {
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
-    // Refresh status & send heartbeat every 15 minutes
+    // Refresh status & send heartbeat every 30 seconds (real-time responsiveness)
     this.heartbeatInterval = setInterval(async () => {
-      const updated = await this.initialize();
-      if (typeof callback === 'function') callback(updated);
-    }, 15 * 60 * 1000);
+      try {
+        const updated = await this.initialize();
+        if (typeof callback === 'function') callback(updated);
+      } catch (e) {}
+    }, intervalMs);
   }
 
   stop() {

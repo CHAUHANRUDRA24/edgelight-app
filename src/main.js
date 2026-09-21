@@ -333,6 +333,20 @@ ipcMain.handle('get-license-info', () => {
   return licenseManager.getStatus();
 });
 
+ipcMain.handle('refresh-license-info', async () => {
+  try {
+    const updated = await licenseManager.refresh();
+    currentLicenseStatus = updated;
+    updateTrayMenu(currentLightState);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('license-status-changed', updated);
+    }
+    return updated;
+  } catch (e) {
+    return licenseManager.getStatus();
+  }
+});
+
 ipcMain.handle('get-payment-config', () => {
   return licenseManager.getPaymentConfig();
 });

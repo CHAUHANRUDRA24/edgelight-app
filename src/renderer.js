@@ -1609,12 +1609,66 @@
 
     // If unauthorized, turn off ring and lock
     if (!info.isAuthorized) {
-      if (state.on) {
-        setOn(false);
+       if (state.on) {
+         setOn(false);
+       }
+       power.classList.remove('active');
+       power.setAttribute('aria-pressed', 'false');
+       power.title = 'License required — Click to view HWID';
+     } else {
+       power.title = state.on ? 'Turn Off (Ctrl+Shift+L)' : 'Turn On (Ctrl+Shift+L)';
+     }
+
+     if (openPlansFromLicenseBtn) {
+       if (info.status === 'approved') {
+         openPlansFromLicenseBtn.textContent = '✓ Commercial License Active';
+         openPlansFromLicenseBtn.classList.remove('pulse-glow');
+         openPlansFromLicenseBtn.style.opacity = '0.85';
+       } else {
+         openPlansFromLicenseBtn.textContent = '💳 Upgrade / View Plans (from ₹29)';
+         openPlansFromLicenseBtn.classList.add('pulse-glow');
+         openPlansFromLicenseBtn.style.opacity = '1';
+       }
+     }
+  }
+
+  // ── REAL-TIME LIVE LICENSE SYNCHRONIZATION ────────────────────────
+  let liveLicenseSyncTimer = null;
+  let isCheckingLicense = false;
+
+  async function checkLiveLicense() {
+    if (isCheckingLicense) return;
+    isCheckingLicense = true;
+    try {
+      if (window.edgeLightAPI?.refreshLicenseInfo) {
+        const updated = await window.edgeLightAPI.refreshLicenseInfo();
+        if (updated) {
+          updateLicenseUI(updated);
+        }
       }
-      power.classList.remove('active');
-      power.setAttribute('aria-pressed', 'false');
-      power.title = 'License required — Click to view HWID';
+    } catch (e) {
+    } finally {
+      isCheckingLicense = false;
+    }
+  }
+
+  function startLiveLicenseSync() {
+    if (liveLicenseSyncTimer) clearInterval(liveLicenseSyncTimer);
+    checkLiveLicense();
+    // Real-time live check every 2.5 seconds while modal is open
+    liveLicenseSyncTimer = setInterval(() => {
+      if (isAnyModalOpen()) {
+        checkLiveLicense();
+      } else {
+        stopLiveLicenseSync();
+      }
+    }, 2500);
+  }
+
+  function stopLiveLicenseSync() {
+    if (liveLicenseSyncTimer) {
+      clearInterval(liveLicenseSyncTimer);
+      liveLicenseSyncTimer = null;
     }
   }
 
@@ -1625,11 +1679,15 @@
     if (window.edgeLightAPI?.bringToFront) {
       window.edgeLightAPI.bringToFront();
     }
+    startLiveLicenseSync();
   }
 
   function hideLicenseModal() {
     if (!licenseModal) return;
     licenseModal.classList.remove('visible');
+    if (!wizardModal?.classList.contains('visible')) {
+      stopLiveLicenseSync();
+    }
     if (!bar.classList.contains('visible') && !isAnyModalOpen()) {
       setClickThrough(true);
     }
@@ -1775,10 +1833,14 @@
     if (window.edgeLightAPI?.bringToFront) {
       window.edgeLightAPI.bringToFront();
     }
+    startLiveLicenseSync();
   }
 
   function hideSetupWizard() {
     wizardModal?.classList.remove('visible');
+    if (!licenseModal?.classList.contains('visible')) {
+      stopLiveLicenseSync();
+    }
     if (!bar.classList.contains('visible') && !isAnyModalOpen()) {
       setClickThrough(true);
     }
