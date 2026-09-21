@@ -11,7 +11,7 @@ function loadEnv() {
   const envPath = path.join(__dirname, '..', '.env');
   const config = {
     FIREBASE_PROJECT_ID: 'edge-light-24',
-    FIREBASE_API_KEY: '',
+    FIREBASE_API_KEY: 'AIzaSyD3rx21xx-Fz2iWk367chc3HIcfY2Y5bAU',
     FIREBASE_AUTH_DOMAIN: 'edge-light-24.firebaseapp.com',
     FIREBASE_STORAGE_BUCKET: 'edge-light-24.firebasestorage.app',
     FIREBASE_MESSAGING_SENDER_ID: '1048711466271',
@@ -348,7 +348,7 @@ class LicenseManager {
           this.firestore.upsertDocument(this.hwidInfo.shortHwid, {
             lastActiveAt: new Date().toISOString(),
             pcName: os.hostname(),
-            appVersion: app?.getVersion ? app.getVersion() : '1.0.3'
+            appVersion: app?.getVersion ? app.getVersion() : '1.0.4'
           }).catch(() => {});
         } else if (remote && remote.notFound) {
           // Auto-register new device in Firestore as 'trial'
@@ -359,7 +359,7 @@ class LicenseManager {
             pcName: os.hostname(),
             registeredAt: new Date().toISOString(),
             lastActiveAt: new Date().toISOString(),
-            appVersion: app?.getVersion ? app.getVersion() : '1.0.3'
+            appVersion: app?.getVersion ? app.getVersion() : '1.0.4'
           }).catch(() => {});
         }
       } catch (e) {

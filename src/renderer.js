@@ -1892,4 +1892,18 @@
       showSetupWizard(1);
     });
   }
+
+  // Display app version on dock badge
+  const versionBadgeEl = document.getElementById('version-badge');
+  if (versionBadgeEl) {
+    if (window.edgeLightAPI?.getAppVersion) {
+      window.edgeLightAPI.getAppVersion().then((ver) => {
+        if (ver) versionBadgeEl.textContent = `v${ver}`;
+      }).catch(() => {
+        versionBadgeEl.textContent = 'v1.0.4';
+      });
+    } else {
+      versionBadgeEl.textContent = 'v1.0.4';
+    }
+  }
 })();

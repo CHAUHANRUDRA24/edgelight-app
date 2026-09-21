@@ -133,8 +133,8 @@ npm run dist
 ```
 
 Build outputs are generated in the `dist/` folder:
-- `dist/Edge Light 1.0.3.exe` (Standalone Portable)
-- `dist/Edge Light Setup 1.0.3.exe` (NSIS Installer)
+- `dist/Edge Light 1.0.4.exe` (Standalone Portable)
+- `dist/Edge Light Setup 1.0.4.exe` (NSIS Installer)
 
 ---
 
