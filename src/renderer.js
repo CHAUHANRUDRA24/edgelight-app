@@ -31,6 +31,7 @@
   const privacyNote = document.getElementById('privacy-note');
   const licenseBadge = document.getElementById('license-badge');
   const licenseModal = document.getElementById('license-modal');
+  const wizardModal = document.getElementById('setup-wizard-modal');
   const closeLicenseBtn = document.getElementById('closeLicenseBtn');
   const copyHwidBtn = document.getElementById('copyHwidBtn');
   const hwidDisplay = document.getElementById('hwidDisplay');
@@ -817,7 +818,19 @@
   let isInteractingWithDock = false;
   let clickThroughState = true;
 
+  function isAnyModalOpen() {
+    const licModal = licenseModal || document.getElementById('license-modal');
+    const wizModal = wizardModal || document.getElementById('setup-wizard-modal');
+    return Boolean(
+      (licModal && licModal.classList.contains('visible')) ||
+      (wizModal && wizModal.classList.contains('visible'))
+    );
+  }
+
   function setClickThrough(enableClickThrough) {
+    if (enableClickThrough && isAnyModalOpen()) {
+      enableClickThrough = false;
+    }
     if (clickThroughState === enableClickThrough) return;
     clickThroughState = enableClickThrough;
     if (window.edgeLightAPI?.setIgnoreMouseEvents) {
@@ -836,8 +849,8 @@
     if (stream && state.on && privacyNote) {
       privacyNote.classList.add('visible');
     }
-    // Only capture clicks if pointer is currently over the dock controls
-    if (isInteractingWithDock || isPointerDown) {
+    // Only capture clicks if pointer is currently over the dock controls or a modal is open
+    if (isInteractingWithDock || isPointerDown || isAnyModalOpen()) {
       setClickThrough(false);
     } else {
       setClickThrough(true);
@@ -849,7 +862,7 @@
   }
 
   function scheduleHideDock() {
-    if (isInteractingWithDock || bar.contains(document.activeElement)) return;
+    if (isInteractingWithDock || bar.contains(document.activeElement) || isAnyModalOpen()) return;
     forceHideDock();
   }
 
@@ -862,7 +875,9 @@
     if (privacyNote) {
       privacyNote.classList.remove('visible');
     }
-    setClickThrough(true);
+    if (!isAnyModalOpen()) {
+      setClickThrough(true);
+    }
     if (window.edgeLightAPI?.notifyControlsState) {
       window.edgeLightAPI.notifyControlsState(false);
     }
@@ -921,8 +936,10 @@
   bar.addEventListener('mouseleave', () => {
     if (isPointerDown) return;
     isInteractingWithDock = false;
-    setClickThrough(true);
-    resetIdleTimer();
+    if (!isAnyModalOpen()) {
+      setClickThrough(true);
+      resetIdleTimer();
+    }
   });
 
   hoverZone.addEventListener('mouseenter', () => {
@@ -941,8 +958,10 @@
   bar.addEventListener('focusout', () => {
     if (isPointerDown) return;
     isInteractingWithDock = false;
-    setClickThrough(true);
-    resetIdleTimer();
+    if (!isAnyModalOpen()) {
+      setClickThrough(true);
+      resetIdleTimer();
+    }
   });
 
   window.addEventListener('mousemove', (e) => {
@@ -952,6 +971,13 @@
     mouseState.targetY = e.clientY;
     if (state.avoidMouse && (state.on || renderState.thickScale > 0.001)) {
       requestRender();
+    }
+
+    // When modal (license or wizard) is visible, never pass clicks through to background
+    if (isAnyModalOpen()) {
+      clearTimeout(idleTimer);
+      setClickThrough(false);
+      return;
     }
 
     // Check if cursor is over control dock bounds with exact pixel bounds (zero margin)
@@ -1007,7 +1033,7 @@
     mouseState.targetY = -9999;
     mouseState.targetProximity = 0;
     requestRender();
-    if (!isPointerDown) {
+    if (!isPointerDown && !isAnyModalOpen()) {
       isInteractingWithDock = false;
       setClickThrough(true);
     }
@@ -1018,7 +1044,7 @@
     mouseState.targetY = -9999;
     mouseState.targetProximity = 0;
     requestRender();
-    if (!isPointerDown) {
+    if (!isPointerDown && !isAnyModalOpen()) {
       isInteractingWithDock = false;
       setClickThrough(true);
     }
@@ -1601,7 +1627,7 @@
   function hideLicenseModal() {
     if (!licenseModal) return;
     licenseModal.classList.remove('visible');
-    if (!bar.classList.contains('visible')) {
+    if (!bar.classList.contains('visible') && !isAnyModalOpen()) {
       setClickThrough(true);
     }
   }
@@ -1638,7 +1664,6 @@
   });
 
   // ── SETUP WIZARD & DIRECT BUYING (UNDER ₹100) ──────────────────────
-  const wizardModal = document.getElementById('setup-wizard-modal');
   const closeWizardBtn = document.getElementById('closeWizardBtn');
   const openPlansFromLicenseBtn = document.getElementById('openPlansFromLicenseBtn');
   const stepTabs = document.querySelectorAll('.wizard-steps .step-tab');
@@ -1748,7 +1773,7 @@
 
   function hideSetupWizard() {
     wizardModal?.classList.remove('visible');
-    if (!bar.classList.contains('visible') && !licenseModal?.classList.contains('visible')) {
+    if (!bar.classList.contains('visible') && !isAnyModalOpen()) {
       setClickThrough(true);
     }
   }
@@ -1834,7 +1859,19 @@
     }
   });
 
-  openPlansFromLicenseBtn?.addEventListener('click', () => {
+  // ESC key dismisses active modal
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (wizardModal?.classList.contains('visible')) {
+        hideSetupWizard();
+      } else if (licenseModal?.classList.contains('visible')) {
+        hideLicenseModal();
+      }
+    }
+  });
+
+  openPlansFromLicenseBtn?.addEventListener('click', (e) => {
+    e?.stopPropagation();
     hideLicenseModal();
     showSetupWizard(3);
   });
